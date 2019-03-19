@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/accorvin/es-template-manager.png)](https://travis-ci.com/accorvin/es-template-manager)
+
 # es-template-manager
 A utility for managing Elasticsearch index templates in source control
 
