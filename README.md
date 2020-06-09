@@ -45,3 +45,6 @@ Run `python es-template-manager.py -h` to see a full list of arguments.
 
   * `--overwrite-templates`: Whether to overwrite any templates that already
     exist
+
+  * `--pushgateway_enpoint`: If you want to push the final status of the job
+    to a pushgateway endpoint
