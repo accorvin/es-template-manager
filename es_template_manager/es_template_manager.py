@@ -7,7 +7,7 @@ import os
 import requests
 import sys
 import urllib3
-
+from prometheus_client import Gauge, CollectorRegistry, push_to_gateway
 
 urllib3.disable_warnings()
 
@@ -67,6 +67,8 @@ def parse_args():
     parser.add_argument('--overwrite-templates', default=False,
                         action='store_true',
                         help='Overwrite any templates that already exist')
+    parser.add_argument('--pushgateway-endpoint', default=None,
+                        help=('The Pushgateway Endpoint'))
     return parser.parse_args()
 
 
@@ -92,7 +94,7 @@ def load_template(logger, template_path):
     return (template_name, template_data)
 
 
-def template_exists(logger, es, template_name):
+def template_exists(logger, es, template_name, pushgateway_endpoint):
     logger.debug(f'Checking if template "{template_name}" exists')
     status_code = es.head(f'_template/{template_name}').status_code
     if status_code == 404:
@@ -103,16 +105,26 @@ def template_exists(logger, es, template_name):
         logger.exception((f'Unexpected status code "{status_code}" received'
                           f' when checking if template "{template_name}"'
                           ' exists. Exiting.'))
+        if pushgateway_endpoint:
+            pushstatus((f'Unexpected status code "{status_code}" received'
+                        f' when checking if template "{template_name}"'
+                        ' exists. Exiting.'), pushgateway_endpoint, 1)
         sys.exit(1)
 
 
-def apply_template(logger, es, overwrite, template_name, template_data):
-    exists = template_exists(logger, es, template_name)
+def apply_template(logger, es, overwrite, template_name, template_data,
+                   pushgateway_endpoint):
+    exists = template_exists(logger, es, template_name, pushgateway_endpoint)
     if exists and not overwrite:
         logger.exception((f'A template with the name "{template_name}"'
                           ' already exists. If you wish to overwrite it, run'
                           ' the script with the "--overwrite-templates"'
                           ' argument. Exiting.'))
+        if pushgateway_endpoint:
+            pushstatus((f'A template with the name "{template_name}"'
+                        ' already exists. If you wish to overwrite it, run'
+                        ' the script with the "--overwrite-templates"'
+                        ' argument. Exiting.'), pushgateway_endpoint, 1)
         sys.exit(1)
     else:
         logger.debug(f'Creating template "{template_name}"')
@@ -120,12 +132,27 @@ def apply_template(logger, es, overwrite, template_name, template_data):
         if r.status_code != 200:
             logger.exception(('Erorr when creating template '
                               f'"{template_name}": {r.text}'))
+            if pushgateway_endpoint:
+                pushstatus(('Erorr when creating template '
+                           f'"{template_name}"'), pushgateway_endpoint, 1)
             sys.exit(1)
+
+
+def pushstatus(msg, pushgateway_endpoint, failure):
+    registry = CollectorRegistry()
+    g = Gauge('template_manager_completion_status',
+              'The status of the t template manager task',
+              ["status"], registry=registry)
+    g.labels(status=msg).set(failure)
+
+    push_to_gateway(pushgateway_endpoint,
+                    job='template_manager', registry=registry)
 
 
 def main():
     args = parse_args()
     logger = setup_logging(args.debug)
+    pushgateway_endpoint = args.pushgateway_endpoint
     es = ElasticsearchConnector(logger, args.es_use_ssl, args.es_hostname,
                                 args.es_port, args.es_cacert, args.es_cert,
                                 args.es_key)
@@ -133,6 +160,10 @@ def main():
         logger.exception(('The specified template directory '
                           f'"{args.template_directory}" does '
                           'not exist. Exiting.'))
+        if pushgateway_endpoint:
+            pushstatus(('The specified template directory '
+                       f'"{args.template_directory}" does '
+                        'not exist.'), pushgateway_endpoint, 1)
         sys.exit(1)
 
     templates = {}
@@ -140,12 +171,15 @@ def main():
     for template in template_directory:
         template_path = os.path.join(args.template_directory,
                                      template)
-        template_name, template_data = load_template(logger, template_path)
+        template_name, template_data = load_template(
+            logger, template_path, pushgateway_endpoint)
         templates[template_name] = template_data
 
     for template_name, template_data in templates.items():
         apply_template(logger, es, args.overwrite_templates, template_name,
-                       template_data)
+                       template_data, pushgateway_endpoint)
+    if pushgateway_endpoint:
+        pushstatus("Task Completed Successfully", pushgateway_endpoint, 0)
 
 
 if __name__ == '__main__':

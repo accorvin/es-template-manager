@@ -10,6 +10,7 @@ flake8 = "*"
 
 [packages]
 requests = "*"
+prometheus_client = "*"
 
 [requires]
 python_version = "3.7"
