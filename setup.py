@@ -4,7 +4,7 @@ with open('README.md') as f:
     long_description = f.read()
 
 setuptools.setup(name='es-template-manager',
-                 version='1.0',
+                 version='1.1',
                  author='Alex Corvin',
                  author_email='accorvin@live.com',
                  description=('A utility for managing Elasticsearch index'
