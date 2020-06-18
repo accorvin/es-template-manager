@@ -172,7 +172,7 @@ def main():
         template_path = os.path.join(args.template_directory,
                                      template)
         template_name, template_data = load_template(
-            logger, template_path, pushgateway_endpoint)
+            logger, template_path)
         templates[template_name] = template_data
 
     for template_name, template_data in templates.items():
