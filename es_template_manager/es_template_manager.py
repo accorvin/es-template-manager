@@ -169,6 +169,8 @@ def main():
     templates = {}
     template_directory = os.listdir(args.template_directory)
     for template in template_directory:
+        if template.startswith('.'):
+            continue
         template_path = os.path.join(args.template_directory,
                                      template)
         template_name, template_data = load_template(
